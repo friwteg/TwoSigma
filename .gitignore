@@ -24,6 +24,17 @@ dist/
 *.db
 *.sqlite
 
+# Uploaded datasets (пользовательские данные)
+uploaded_datasets/
+
+# Experiment datasets (данные экспериментов)
+data/experiments/
+
+# Test datasets (тестовые данные)
+test_*.csv
+*_test.csv
+*_updated.csv
+
 # Environment variables
 .env
 .env.local
@@ -31,3 +42,13 @@ dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Claude Code (файлы Claude AI)
+.claude/
+
+# Документы ревью (опционально - можно закоммитить)
+CODE_REVIEW_RESULTS.md
+REFACTORING_SUMMARY.md
+CHANGELOG.md
+ARCHITECTURE.md
+SQL_METRICS_GUIDE.md
