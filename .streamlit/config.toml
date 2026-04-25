@@ -1,0 +1,9 @@
+[client]
+showSidebarNavigation = false
+
+[server]
+runOnSave = true
+fileWatcherType = "auto"
+
+[runner]
+fastReruns = true

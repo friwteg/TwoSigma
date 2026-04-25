@@ -18,7 +18,7 @@ dist/
 *.swo
 
 # Streamlit
-.streamlit/
+#.streamlit/
 
 # Database
 *.db
