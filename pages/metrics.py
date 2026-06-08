@@ -3,11 +3,41 @@
 """
 import streamlit as st
 import pandas as pd
+import streamlit.components.v1 as components
 from database import get_db, get_user_datasets, get_user_metrics, delete_metric
 from components.metric_calculator import calculate_metric
 from components.metric_creator import show_sql_metric_creator, show_constructor_metric_creator
 from utils.metric_templates import TEMPLATE_NAMES
 from utils.metric_display import display_period_metric_result, display_sql_metric_result, display_simple_metric_result
+
+_PDF_BUTTON_HTML = """
+<style>
+.pdf-btn {
+    position: fixed;
+    bottom: 28px;
+    right: 28px;
+    z-index: 999999;
+    background-color: #ff4b4b;
+    color: white;
+    border: none;
+    border-radius: 999px;
+    padding: 14px 22px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+.pdf-btn:hover { background-color: #cc3a3a; }
+@media print { .pdf-btn { display: none !important; } }
+</style>
+<button class="pdf-btn" onclick="window.parent.print()">
+    &#128196; Сохранить PDF
+</button>
+"""
 
 
 def show_metrics_page():
@@ -35,12 +65,12 @@ def show_metrics_page():
 
     if not datasets:
         st.warning("Сначала загрузите датасет в разделе 'Датасеты'")
+        components.html(_PDF_BUTTON_HTML, height=0)
         return
 
     # Показываем уведомление о создании метрики
     if st.session_state.get("metric_created"):
         st.success(f"✅ Метрика '{st.session_state.get('metric_created_name')}' успешно создана!", icon="🎉")
-        # Сбрасываем флаг после показа
         del st.session_state["metric_created"]
         del st.session_state["metric_created_name"]
 
@@ -54,10 +84,10 @@ def show_metrics_page():
             # Получаем информацию о датасете
             dataset = next((ds for ds in datasets if ds.id == metric.dataset_id), None)
 
-            # Определяем тип метрики для отображения
-            # Защита: config может быть строкой (например, после неверной записи в БД)
+            # Защита: config может быть строкой после некорректной записи в БД
             config = metric.config if isinstance(metric.config, dict) else {}
 
+            # Определяем тип метрики для отображения
             if metric.metric_type == "template":
                 template_key = config.get("template")
                 metric_type_label = TEMPLATE_NAMES.get(template_key, "Шаблонная метрика")
@@ -80,21 +110,17 @@ def show_metrics_page():
                     st.markdown(f"<div style='padding-top: 8px; color: #666;'>{metric_type_label}</div>", unsafe_allow_html=True)
 
                 with col_calc:
-                    # Кнопка для разворачивания/сворачивания
                     is_expanded = st.session_state.get(f"show_metric_{metric.id}", False)
                     button_label = "🔼 Скрыть" if is_expanded else "📊 Рассчитать"
 
                     if st.button(button_label, key=f"calc_{metric.id}", use_container_width=True):
                         if is_expanded:
-                            # Сворачиваем
                             st.session_state[f"show_metric_{metric.id}"] = False
                         else:
-                            # Разворачиваем
                             st.session_state[f"show_metric_{metric.id}"] = True
                             st.session_state[f"just_calculated_{metric.id}"] = True
 
                 with col_delete:
-                    # Кнопка удаления с подтверждением
                     if st.button("🗑️", key=f"delete_metric_{metric.id}", use_container_width=True, help="Удалить метрику"):
                         st.session_state[f"confirm_delete_{metric.id}"] = True
 
@@ -108,7 +134,6 @@ def show_metrics_page():
                                 db = get_db()
                                 delete_metric(db, metric.id, st.session_state.user['id'])
                                 db.close()
-                                # Очищаем все флаги
                                 if f"show_metric_{metric.id}" in st.session_state:
                                     del st.session_state[f"show_metric_{metric.id}"]
                                 if f"confirm_delete_{metric.id}" in st.session_state:
@@ -123,32 +148,25 @@ def show_metrics_page():
 
             # Расчет метрики (показывается только если развернуто)
             if st.session_state.get(f"show_metric_{metric.id}", False):
-                # Используем контейнер с ключом для стабильности
                 metric_container = st.container()
 
                 with metric_container:
                     try:
                         df = pd.read_csv(dataset.filepath)
 
-                        # Для метрик с временным измерением добавляем выбор группировки
                         modified_config = config.copy()
 
-                        # Проверяем, есть ли у метрики поле даты (для графиков)
                         has_date_field = False
                         if metric.metric_type == "template":
                             fields = config.get("fields", {})
                             template_type = config.get("template")
 
-                            # Для всех шаблонных метрик проверяем наличие date_field
                             if fields.get("date_field"):
                                 has_date_field = True
-                            # Для DAU, WAU, MAU, Churn, Retention всегда есть дата
                             elif template_type in ["dau", "wau", "mau", "churn", "retention"]:
                                 has_date_field = True
 
-                        # Если есть временное измерение, показываем селектор группировки
-                        # НО не для DAU, WAU, MAU - у них группировка фиксированная
-                        time_window = "day"  # Значение по умолчанию
+                        time_window = "day"
                         if has_date_field and config.get("template") not in ["dau", "wau", "mau"]:
                             time_window = st.selectbox(
                                 "Группировка",
@@ -160,13 +178,11 @@ def show_metrics_page():
                                 )
                             )
 
-                        # Обновляем конфигурацию с выбранной группировкой
                         if metric.metric_type == "template":
                             if "fields" not in modified_config:
                                 modified_config["fields"] = {}
                             modified_config["fields"]["time_window"] = time_window
 
-                        # Для churn добавляем выбор временного окна
                         if config.get("template") == "churn":
                             churn_days = st.number_input(
                                 "Временное окно оттока (дней)",
@@ -180,7 +196,6 @@ def show_metrics_page():
                                 modified_config["fields"] = {}
                             modified_config["fields"]["churn_days"] = churn_days
 
-                        # Для retention добавляем выбор дня проверки
                         elif config.get("template") == "retention":
                             retention_day = st.number_input(
                                 "День для проверки Retention (Day N)",
@@ -194,10 +209,8 @@ def show_metrics_page():
                                 modified_config["fields"] = {}
                             modified_config["fields"]["retention_day"] = retention_day
 
-                        # Вызываем расчет метрики с модифицированной конфигурацией
                         result_data = calculate_metric(df, metric.metric_type, modified_config)
 
-                        # Проверяем, что результат содержит временные данные (для графиков)
                         if isinstance(result_data, dict) and 'periods' in result_data:
                             if result_data.get('no_data') or result_data['count'] == 0:
                                 if st.session_state.get(f"just_calculated_{metric.id}", False):
@@ -230,50 +243,13 @@ def show_metrics_page():
 
             st.divider()
 
-    # --- Плавающая кнопка сохранения в PDF (внизу справа) ---
-    st.markdown("""
-        <style>
-        .pdf-btn {
-            position: fixed;
-            bottom: 28px;
-            right: 28px;
-            z-index: 9999;
-            background-color: #ff4b4b;
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 14px 24px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.22);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s;
-        }
-        .pdf-btn:hover {
-            background-color: #cc3a3a;
-        }
-        @media print {
-            section[data-testid="stSidebar"],
-            .pdf-btn,
-            [data-testid="stToolbar"],
-            [data-testid="stDecoration"],
-            [data-testid="stStatusWidget"] { display: none !important; }
-            .main .block-container { padding: 0 !important; max-width: 100% !important; }
-        }
-        </style>
-        <button class="pdf-btn" onclick="window.print()">
-            📄 Сохранить PDF
-        </button>
-    """, unsafe_allow_html=True)
+    # Плавающая кнопка «Сохранить PDF» — вызывает window.parent.print() через iframe
+    components.html(_PDF_BUTTON_HTML, height=0)
 
 
 def show_create_metric_page():
     """Страница создания новой метрики"""
 
-    # Заголовок с кнопкой возврата
     col_back, col_title = st.columns([1, 5])
     with col_back:
         if st.button("← Назад", use_container_width=True):
@@ -282,7 +258,6 @@ def show_create_metric_page():
     with col_title:
         st.title("Создать новую метрику")
 
-    # Получаем датасеты пользователя
     db = get_db()
     datasets = get_user_datasets(db, st.session_state.user['id'])
     db.close()
@@ -297,7 +272,6 @@ def show_create_metric_page():
 
     st.divider()
 
-    # Выбор способа создания метрики
     creation_method = st.radio(
         "Способ создания метрики",
         options=["constructor", "sql"],
