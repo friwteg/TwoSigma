@@ -55,8 +55,11 @@ def show_metrics_page():
             dataset = next((ds for ds in datasets if ds.id == metric.dataset_id), None)
 
             # Определяем тип метрики для отображения
+            # Защита: config может быть строкой (например, после неверной записи в БД)
+            config = metric.config if isinstance(metric.config, dict) else {}
+
             if metric.metric_type == "template":
-                template_key = metric.config.get("template")
+                template_key = config.get("template")
                 metric_type_label = TEMPLATE_NAMES.get(template_key, "Шаблонная метрика")
             elif metric.metric_type == "sql":
                 metric_type_label = "SQL-запрос"
@@ -128,13 +131,13 @@ def show_metrics_page():
                         df = pd.read_csv(dataset.filepath)
 
                         # Для метрик с временным измерением добавляем выбор группировки
-                        modified_config = metric.config.copy()
+                        modified_config = config.copy()
 
                         # Проверяем, есть ли у метрики поле даты (для графиков)
                         has_date_field = False
                         if metric.metric_type == "template":
-                            fields = metric.config.get("fields", {})
-                            template_type = metric.config.get("template")
+                            fields = config.get("fields", {})
+                            template_type = config.get("template")
 
                             # Для всех шаблонных метрик проверяем наличие date_field
                             if fields.get("date_field"):
@@ -146,14 +149,14 @@ def show_metrics_page():
                         # Если есть временное измерение, показываем селектор группировки
                         # НО не для DAU, WAU, MAU - у них группировка фиксированная
                         time_window = "day"  # Значение по умолчанию
-                        if has_date_field and metric.config.get("template") not in ["dau", "wau", "mau"]:
+                        if has_date_field and config.get("template") not in ["dau", "wau", "mau"]:
                             time_window = st.selectbox(
                                 "Группировка",
                                 options=["day", "week", "month"],
                                 format_func=lambda x: {"day": "По дням", "week": "По неделям", "month": "По месяцам"}[x],
                                 key=f"time_window_{metric.id}",
                                 index={"day": 0, "week": 1, "month": 2}.get(
-                                    metric.config.get("fields", {}).get("time_window", "day"), 0
+                                    config.get("fields", {}).get("time_window", "day"), 0
                                 )
                             )
 
@@ -164,12 +167,12 @@ def show_metrics_page():
                             modified_config["fields"]["time_window"] = time_window
 
                         # Для churn добавляем выбор временного окна
-                        if metric.config.get("template") == "churn":
+                        if config.get("template") == "churn":
                             churn_days = st.number_input(
                                 "Временное окно оттока (дней)",
                                 min_value=1,
                                 max_value=365,
-                                value=metric.config.get("fields", {}).get("churn_days", 30),
+                                value=config.get("fields", {}).get("churn_days", 30),
                                 key=f"churn_days_{metric.id}",
                                 help="Сколько дней неактивности считается оттоком"
                             )
@@ -178,18 +181,18 @@ def show_metrics_page():
                             modified_config["fields"]["churn_days"] = churn_days
 
                         # Для retention добавляем выбор дня проверки
-                        elif metric.config.get("template") == "retention":
+                        elif config.get("template") == "retention":
                             retention_day = st.number_input(
                                 "День для проверки Retention (Day N)",
                                 min_value=1,
                                 max_value=365,
-                                value=metric.config.get("fields", {}).get("retention_day", 7),
+                                value=config.get("fields", {}).get("retention_day", 7),
                                 key=f"retention_day_{metric.id}",
                                 help="Какой день проверять: Day 1, Day 7, Day 30 и т.д."
                             )
                             if "fields" not in modified_config:
                                 modified_config["fields"] = {}
-                                modified_config["fields"]["retention_day"] = retention_day
+                            modified_config["fields"]["retention_day"] = retention_day
 
                         # Вызываем расчет метрики с модифицированной конфигурацией
                         result_data = calculate_metric(df, metric.metric_type, modified_config)
@@ -205,14 +208,14 @@ def show_metrics_page():
                                     st.toast("✓ Метрика рассчитана успешно", icon="✅")
                                     st.session_state[f"just_calculated_{metric.id}"] = False
 
-                                display_period_metric_result(result_data, metric.name, metric.id, metric.config.get("template"))
+                                display_period_metric_result(result_data, metric.name, metric.id, config.get("template"))
 
                         elif metric.metric_type == "sql":
                             if st.session_state.get(f"just_calculated_{metric.id}", False):
                                 st.toast("✓ SQL-запрос выполнен успешно", icon="✅")
                                 st.session_state[f"just_calculated_{metric.id}"] = False
 
-                            display_sql_metric_result(metric.config, df, metric.id)
+                            display_sql_metric_result(config, df, metric.id)
 
                         else:
                             result = calculate_metric(df, metric.metric_type, metric.config)
@@ -226,6 +229,45 @@ def show_metrics_page():
                         st.toast(f"❌ Ошибка расчета метрики: {str(e)}", icon="❌")
 
             st.divider()
+
+    # --- Плавающая кнопка сохранения в PDF (внизу справа) ---
+    st.markdown("""
+        <style>
+        .pdf-btn {
+            position: fixed;
+            bottom: 28px;
+            right: 28px;
+            z-index: 9999;
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.22);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .pdf-btn:hover {
+            background-color: #cc3a3a;
+        }
+        @media print {
+            section[data-testid="stSidebar"],
+            .pdf-btn,
+            [data-testid="stToolbar"],
+            [data-testid="stDecoration"],
+            [data-testid="stStatusWidget"] { display: none !important; }
+            .main .block-container { padding: 0 !important; max-width: 100% !important; }
+        }
+        </style>
+        <button class="pdf-btn" onclick="window.print()">
+            📄 Сохранить PDF
+        </button>
+    """, unsafe_allow_html=True)
 
 
 def show_create_metric_page():
