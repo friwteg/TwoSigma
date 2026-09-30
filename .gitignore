@@ -17,9 +17,6 @@ dist/
 *.swp
 *.swo
 
-# Streamlit
-#.streamlit/
-
 # Database
 *.db
 *.sqlite

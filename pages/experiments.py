@@ -29,7 +29,10 @@ def show_experiments_page():
 
     # Показываем уведомление о создании эксперимента
     if st.session_state.get("experiment_created"):
-        st.success(f"✅ Эксперимент '{st.session_state.get('experiment_created_name')}' успешно создан!", icon="🎉")
+        st.success(
+            f"✅ Эксперимент '{st.session_state.get('experiment_created_name')}' успешно создан!",
+            icon="🎉"
+        )
         # Сбрасываем флаг после показа
         del st.session_state["experiment_created"]
         del st.session_state["experiment_created_name"]
@@ -83,7 +86,12 @@ def show_experiments_page():
 
                 with col_delete:
                     # Кнопка удаления с подтверждением
-                    if st.button("🗑️", key=f"delete_experiment_{experiment.id}", use_container_width=True, help="Удалить эксперимент"):
+                    if st.button(
+                        "🗑️",
+                        key=f"delete_experiment_{experiment.id}",
+                        use_container_width=True,
+                        help="Удалить эксперимент"
+                    ):
                         st.session_state[f"confirm_delete_exp_{experiment.id}"] = True
 
                 # Подтверждение удаления
@@ -149,15 +157,18 @@ def show_experiments_page():
 
                     with col_export:
                         # Кнопка копирования ID в буфер
-                        if st.button(f"📋 Скопировать ID группы {group.group_name}", key=f"copy_{experiment.id}_{group.group_name}"):
+                        if st.button(
+                            f"📋 Скопировать ID группы {group.group_name}",
+                            key=f"copy_{experiment.id}_{group.group_name}"
+                        ):
                             # Получаем пользователей группы
                             exp_users = get_experiment_users(db, experiment.id, group.group_name)
                             user_ids = [str(eu.user_id) for eu in exp_users]
-                            user_ids_str = ','.join(user_ids)
+                            user_ids_str = ",".join(user_ids)
 
                             # Копируем в буфер через JavaScript
                             st.write(f"```\n{user_ids_str}\n```")
-                            st.success(f"✓ Скопируйте ID из поля выше")
+                            st.success("✓ Скопируйте ID из поля выше")
 
                 # Кнопка скачивания всех групп
                 st.markdown("---")
@@ -170,7 +181,7 @@ def show_experiments_page():
 
                     # Создаем DataFrame
                     export_data = [
-                        {'user_id': eu.user_id, 'group': eu.group_name}
+                        {"user_id": eu.user_id, "group": eu.group_name}
                         for eu in all_users
                     ]
                     export_df = pd.DataFrame(export_data)
@@ -207,28 +218,28 @@ def show_experiments_page():
                             results = calculate_experiment_results(experiment, metric)
 
                             # Проверяем, полные ли данные
-                            experiment_incomplete = results.get('_experiment_incomplete', False)
-                            incomplete_warning = results.get('_incomplete_warning', '')
+                            experiment_incomplete = results.get("_experiment_incomplete", False)
+                            incomplete_warning = results.get("_incomplete_warning", "")
 
                             # Сохраняем результаты в БД (пропускаем служебные ключи)
                             for group_name, result in results.items():
                                 # Пропускаем служебные ключи
-                                if group_name.startswith('_'):
+                                if group_name.startswith("_"):
                                     continue
 
                                 import json
                                 results_data = {
-                                    'group_name': group_name,
-                                    'metric_value': result['metric_value'],
-                                    'sample_size': result['sample_size'],
-                                    'std_dev': result['std_dev'],
-                                    'confidence_interval_lower': result['confidence_interval_lower'],
-                                    'confidence_interval_upper': result['confidence_interval_upper'],
-                                    'p_value': result.get('p_value'),
-                                    'test_type': result.get('test_type', experiment.test_type),
-                                    'is_significant': result.get('is_significant', False),
-                                    'warning': result.get('warning'),
-                                    'time_series_data': json.dumps(result.get('time_series', {}))
+                                    "group_name": group_name,
+                                    "metric_value": result["metric_value"],
+                                    "sample_size": result["sample_size"],
+                                    "std_dev": result["std_dev"],
+                                    "confidence_interval_lower": result["confidence_interval_lower"],
+                                    "confidence_interval_upper": result["confidence_interval_upper"],
+                                    "p_value": result.get("p_value"),
+                                    "test_type": result.get("test_type", experiment.test_type),
+                                    "is_significant": result.get("is_significant", False),
+                                    "warning": result.get("warning"),
+                                    "time_series_data": json.dumps(result.get("time_series", {}))
                                 }
                                 save_experiment_results(db, experiment.id, results_data)
 
@@ -263,12 +274,12 @@ def show_experiments_page():
 
                     # Кнопка завершения эксперимента
                     st.markdown("---")
-                    if experiment.status != 'completed':
+                    if experiment.status != "completed":
                         if st.button("✅ Закончить эксперимент", type="primary", key=f"complete_{experiment.id}"):
                             from database import update_experiment_status
                             db = get_db()
                             try:
-                                update_experiment_status(db, experiment.id, st.session_state.user['id'], 'completed')
+                                update_experiment_status(db, experiment.id, st.session_state.user['id'], "completed")
                                 st.success("Эксперимент успешно завершен!")
                                 st.rerun()
                             except Exception as e:
@@ -279,6 +290,13 @@ def show_experiments_page():
                         st.info("✅ Эксперимент завершен")
 
             st.divider()
+
+    # Кнопка сохранения в PDF
+    st.markdown("---")
+    col_left, col_right = st.columns([3, 1])
+    with col_right:
+        if st.button("Распечатать", use_container_width=True, type="secondary"):
+            st.toast("💡 Нажмите **Ctrl+P** (Windows) или **Cmd+P** (Mac) для печати и выберите «Сохранить как PDF»")
 
 
 def show_create_experiment_page():
@@ -320,3 +338,10 @@ def show_create_experiment_page():
     # Показываем форму создания эксперимента
     from components.experiment_creator import show_experiment_creator
     show_experiment_creator(datasets, metrics)
+
+    # Кнопка сохранения в PDF
+    st.markdown("---")
+    col_left, col_right = st.columns([3, 1])
+    with col_right:
+        if st.button("Распечатать", use_container_width=True, type="secondary"):
+            st.toast("💡 Нажмите **Ctrl+P** (Windows) или **Cmd+P** (Mac) для печати и выберите «Сохранить как PDF»")

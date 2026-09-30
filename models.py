@@ -124,13 +124,15 @@ class Metric(Base):
     metric_type = Column(String, nullable=False)
 
     # Конфигурация метрики в JSON
-    # Для simple: {"field": "amount", "aggregation": "sum", "filters": [...]}
-    # Для user_level: {"user_field": "user_id", "value_field": "amount", "aggregation": "avg", "group_by": "user"}
-    # Для time_window: {"date_field": "created_at", "value_field": "amount", "window": "day", "aggregation": "count"}
-    config = Column(JSON, nullable=False)
+    config = Column(String)  # ← исправлено: добавлена закрывающая скобка и тип
+
+    class UserCreate(BaseModel):
+        """Схема для создания пользователя"""
+        username: str
+        email: EmailStr
+        password: str
 
     created_at = Column(DateTime, default=datetime.utcnow)
-
 
 # Pydantic модели (для валидации данных)
 class UserCreate(BaseModel):
